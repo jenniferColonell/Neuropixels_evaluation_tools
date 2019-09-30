@@ -21,7 +21,7 @@ To run these tools:
 	
 (1) If you have long recordings, use the SpikeGLX offline viewer export function to make a 10 minute subset.
 
-(2) Filter the data (and concatentate trials) using the CatGT tool, available [here](http://billkarsh.github.io/SpikeGLX/#offline-analysis-tools). Typical parameters are: -aphipass=300 -aplopass=9000 -gbldmx -gfix=5,8
+(2) Filter the data (and concatentate trials) using the CatGT tool (available here: http://billkarsh.github.io/SpikeGLX/#offline-analysis-tools). Typical parameters are: -aphipass=300 -aplopass=9000 -gbldmx -gfix=5,8
 
 (3) Set parameters in detect_merge_peaks.m, specifically dataType. If your recording only has a subset of the channels, set nchan and dataChan accordingly. Also, note that the XY coordinate file needs to match your recording. Run detect_merge_peaks.m.
 
