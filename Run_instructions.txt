@@ -21,11 +21,16 @@ To run these tools:
 	
 (1) If you have long recordings, use the SpikeGLX offline viewer export function to make a 10 minute subset.
 
-(2) Filter the data (and concatentate trials) using the CatGT tool. Typical parameters are: -aphipass=300 -aplopass=9000 -gbldmx -gfix=5,8
+(2) Filter the data (and concatentate trials) using the CatGT tool, available [here](http://billkarsh.github.io/SpikeGLX/#offline-analysis-tools). Typical parameters are: -aphipass=300 -aplopass=9000 -gbldmx -gfix=5,8
 
 (3) Set parameters in detect_merge_peaks.m, specifically dataType. If your recording only has a subset of the channels, set nchan and dataChan accordingly. Also, note that the XY coordinate file needs to match your recording. Run detect_merge_peaks.m.
 
 (4) Set parameters in allSpike_dist.m. Set dataType to 0 for NP 1.0 or 1 for NP2.0 data. When analyzing NP1.0 data to compare to NP2.0 data, set zMax to 3000 microns. In exChan, list reference and "dead" channels which will have abnormally low rms. Run allSpike_dist.m. Check the "est RMS" plot for channels with anomalously low signal, if there are any, add those to the exChan list and rerun.
 
+The format of XY coordinate file is:
+
+channel\tX\tY
+
+with the X and Y positions given in microns. Two standard coordinate files are included, for bank 0 in a NP1.0 and NP2.0 probe.
 
 
