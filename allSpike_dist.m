@@ -16,7 +16,7 @@ function allSpike_dist( varargin )
 if (length(varargin) == 0)
     % if running standalone, set params here
     zMin = -inf;
-    zMax = inf;
+    zMax = 3000;
     exChan = [191];
     % get thresholding results file from user
     [fileName,fileDir]=uigetfile('*.mat', 'Select threshold results file' );

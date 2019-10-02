@@ -5,9 +5,16 @@ if (length(varargin) == 0)
     %If calling with no parameters, specify here
     % 0 for neuropixels 1.0, 1 for NP 2.0. 
     dataType = 0;
+    % channels to exclude from histograms and summary statistics.
+    % should exclude reference and "dead" channels
     exChan = [191];
+    % z range on probe to include in histogram and summary stats.
+    % NP1.0 full z range = 0-3840 um
+    % NP2.0 rull z range = 0-2880 um
+    % To compare NP1.0 data to a similar tissue volume measured with NP2.0
+    % set zMax = 3000.
     zMin = -inf;
-    zMax = inf;    
+    zMax = 3000;    
 else
     inputCell = varargin(1);
     dataType = inputCell{1};
