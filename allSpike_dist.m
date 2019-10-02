@@ -1,4 +1,38 @@
-function allSpike_dist
+function allSpike_dist( varargin )
+
+% input params: fileDir of peaks.mat, fileName of peaks.mat, zMin, zMax, exChan (array)
+ 
+% Z range for histogram, in um:
+% set to +/- inf to include all channels
+% NP1.0 has vertical pitch = 20 um, 1 bank = 192*20 = 3840 um
+% NP2.0 has vertical pitch = 15 um, 1 bank = 192*15 = 2880 um
+
+% exChan:
+% Channels to exclude in max, min, average calculations. Should always exclude
+% the reference channel (191 for NP 1.0, 127 for NP 2.0.
+% Also exclude any known "dead" or "extra noisy" channels on the probe.
+% these are given in orignal (zero-based) format
+
+if (length(varargin) == 0)
+    % if running standalone, set params here
+    zMin = -inf;
+    zMax = inf;
+    exChan = [191];
+    % get thresholding results file from user
+    [fileName,fileDir]=uigetfile('*.mat', 'Select threshold results file' );
+else
+    % params passed in through varargin
+    inputCell = varargin(1);
+    fileDir = inputCell{1};
+    inputCell = varargin(2);
+    fileName = inputCell{1};
+    inputCell = varargin(3);
+    zMin = inputCell{1};
+    inputCell = varargin(4);
+    zMax = inputCell{1};
+    inputCell = varargin(5);
+    exChan = inputCell{1};
+end
 
 % Reads results *.mat file from detect_merge_peaks.
 % Also requires a simple text file of the site coordinates.
@@ -10,28 +44,10 @@ function allSpike_dist
 % That data is output, along with mean threshold, XZ and percCorrect
 % for each channel in the file <input name>_chan.txt
 
-% A text file of the histogram over select channels: <input name>_hist.txt
+% Output a text file of the histogram over select channels: <input name>_hist.txt
 
-% Set dataType and other user params before running
-% dataType = 0 for NP1.0
-% dataType = 1 for NP2.0
-dataType = 0;
-
-% Histogram can be limited to a particular z range.
-% set the z range before running. Z range is given in um.
-% set to +/- inf to include all channels
-% NP1.0 has vertical pitch = 20 um, 1 bank = 192*20 = 3840 um
-% NP2.0 has vertical pitch = 15 um, 1 bank = 192*15 = 2880 um
-zMin = -inf;
-zMax = inf;    
-
-
-% Exclude channels in max, min, average calculations. Should always exclude
-% the reference channel (191 for NP 1.0, 127 for NP 2.0.
-% Also exclude any known "dead" or "extra noisy" channels on the probe.
-% these are given in orignal (zero-based) format
-exChan = [191];
-exChan = exChan + 1;  %for MATLAB
+    
+exChan = exChan + 1;  %conver to 1 based for MATLAB
 
 largeThresh = 200; %threhold for "large events", in uV
 
@@ -39,8 +55,6 @@ largeThresh = 200; %threhold for "large events", in uV
 % Histogram the raw peaks (res.ampHist) or the merged (res.mAmpHist)
 bMerge = 1;
 
-%get thresholding results file from user
-[fileName,fileDir]=uigetfile('*.mat', 'Select threshold results file' );
 
 suffPos = strfind(fileName,'_peaks.mat');
 outName = [fileName(1:suffPos-1), '_sum.txt'];
@@ -51,22 +65,16 @@ histName = [fileName(1:suffPos-1), '_hist.txt'];
 histID = fopen( fullfile(fileDir,histName), 'w');
 
 load(fullfile(fileDir,fileName));
+dataType = res.dataType;
 
 % amplitude histograms are stored in nchanxnbin array res.ampHist
 [nChan, nBin] = size(res.ampHist);
 
 
-% Get site coords file from user
-[coordName,coordDir]=uigetfile('*.txt', 'Select coords file' );
-cID = fopen( fullfile(coordDir,coordName), 'r' );
-xPos = ones(nChan,1);
-zPos = ones(nChan,1);
-for i = 1:nChan
-    tline = fgetl(cID);
-    currDat = sscanf(tline, '%d%d%d');
-    xPos(i) = currDat(2);
-    zPos(i) = currDat(3);
-end
+% Get site coords from thresholding results file
+xPos = res.xPos;
+zPos = res.zPos;
+
 inZRange = (zPos > zMin) & (zPos < zMax);
 
 if bMerge
@@ -166,16 +174,20 @@ nLarge = 0;
 fprintf( chanOutID, 'X\tZ\t' );
 fprintf( chanOutID, 'chan\test RMS\teventRate\tampMod\t90th ptile\t99th ptile\n');
 
+currRate = zeros(size(MAD_goodChan));
+curr90th = zeros(size(MAD_goodChan));
+curr99th = zeros(size(MAD_goodChan));
+
 for i = 1:goodChan
     [maxCnt, maxI] = max(res.ampHist(i,:));
     currMode = xVal(maxI);
-    curr90th = xVal(pctileFromHist(res.ampHist(i,:),0.9));
-    curr99th = xVal(pctileFromHist(res.ampHist(i,:),0.99));    
-    currRate = sum(res.ampHist(i,:))/res.analyzedSec;
+    curr90th(i) = xVal(pctileFromHist(res.ampHist(i,:),0.9));
+    curr99th(i) = xVal(pctileFromHist(res.ampHist(i,:),0.99));    
+    currRate(i) = sum(res.ampHist(i,:))/res.analyzedSec;
     fprintf( chanOutID, '%d\t%d\t', xPos(i), zPos(i) );
-    fprintf(chanOutID,'%d\t%.3f\t%.3f\t%.3f\t',goodChanList(i),MAD_goodChan(i),currRate,currMode);
-    fprintf(chanOutID,'%.3f\t%.3f\n',curr90th,curr99th);
-    if curr99th > largeThresh
+    fprintf(chanOutID,'%d\t%.3f\t%.3f\t%.3f\t',goodChanList(i),MAD_goodChan(i),currRate(i),currMode);
+    fprintf(chanOutID,'%.3f\t%.3f\n',curr90th(i),curr99th(i));
+    if curr99th(i) > largeThresh
         nLarge = nLarge + 1;
     end
 end
@@ -189,15 +201,60 @@ totalCounts = sum(allChan);
 normHist = allChan/totalCounts;
 
 
+
 figure(1);
 plot(xVal, allChan);
 titleStr = sprintf('Amplitude Distribution for %s', fileName );
 title(titleStr, 'Interpreter', 'none');
+xlabel('amplitude (uV)');
+ylabel('number of spikes');
 
-figure(2)
+figure(2);
+subplot(3,1,1);
 plot(goodChanList, MAD_goodChan);
-titleStr = sprintf('est RMS (uV) vs. channel' );
+titleStr = sprintf('est RMS' );
 title(titleStr, 'Interpreter', 'none');
+xlabel('channel index');
+ylabel('estimated rms (uV)');
+
+subplot(3,1,2);
+plot(goodChanList, currRate);
+titleStr = sprintf('Event Rate' );
+title(titleStr, 'Interpreter', 'none');
+xlabel('channel index');
+ylabel('event rate (Hz)');
+
+subplot(3,1,3);
+plot(goodChanList, curr90th, goodChanList, curr99th);
+titleStr = sprintf('90th (blue) and 99th (orange) percentile' );
+title(titleStr, 'Interpreter', 'none');
+xlabel('channel index');
+ylabel('voltage at percentile (uV)');
+
+
+% bulid inverse CDF map for each channel
+% code from Nick Steinmetz,
+figure(3)
+cdf = single(cumsum(fliplr(res.mAmpHist),2));
+cdf = cdf/res.analyzedSec;  %convert to spike rates
+[nRow, nCol] = size(cdf);
+
+%flip back
+cdf = fliplr(cdf);
+
+depthX = 1:nRow;
+imagesc(xVal, depthX, cdf);
+xlabel('spike amplitude (uV)');
+ylabel('channel index');
+title('inverse cdf');
+set(gca,'YDir','normal');
+colorbar
+colormap(colormap_greyZero_blackred)
+caxis([0 20]);
+
+
+
+
 
 fprintf( histID, 'uV\thistCounts\tnormHist\n');
 for i = 1:nBin
@@ -215,8 +272,8 @@ for i = 1:numel(pVec)
     pctInd(i) = pctileFromHist( allChan, pVec(i) );
 end
 
-%channels with 99th percentile events > 200 uV (how many big units do we
-%see?)
+% channels with 99th percentile events > 200 uV (how many big units do we
+% see?)
 
 
 fprintf( outID, 'fileName\teventRate\t50th\t90th\t99th\t#channels with 99th > 200\test rms\tstd\tmax\tmin\n' );
@@ -298,4 +355,10 @@ function [chans, cProfile] = chanProfile( ampHist, pctInd )
             cProfile(nContrib) = currSum/totalArea;
         end
     end
+end
+
+function map = colormap_greyZero_blackred()
+    % custom colormap for inverse cdf plot from Nick Steinmetz
+    map = hot(1000);
+    map(1,:) = [0.4,0.4,0.4];
 end

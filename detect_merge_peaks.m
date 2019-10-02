@@ -1,8 +1,18 @@
-function detect_merge_peaks()
+function detect_merge_peaks( varargin )
 
-% Set the dataType and qqFactor before running
-% 0 for neuropixels 1.0, 1 for NP 2.0
-dataType = 0;
+% 0 for neuropixels 1.0, 1 for NP 2.0. 
+if (length(varargin) == 0)
+    %If calling with no parameters, specify here
+    % 0 for neuropixels 1.0, 1 for NP 2.0. 
+    dataType = 0;
+    exChan = [191];
+    zMin = -inf;
+    zMax = inf;    
+else
+    inputCell = varargin(1);
+    dataType = inputCell{1};
+end
+
 
 %thresholding params
 bUseConstThresh = 1;
@@ -17,7 +27,7 @@ hCfg.refracIntSamp = 7; %in samples, distance in time to look for duplicat peaks
 nchan = 385;
 dataChan = 384;
 
-maxTime = 600; %in sec; takes the first maxTime secons in the file
+maxTime = 600; %in sec; takes the first maxTime seconds in the file
 
 % get data file from user. 
 [fileName,fileDir]=uigetfile('*.bin', 'Select file' );
@@ -187,7 +197,10 @@ fprintf( "total number of spikes: %d\n", numel(allTimes));
     res.ampHist = ampHist;
     res.qqFactor = qqFactor;
     res.analyzedSec = analyzedSec;
-    
+    res.dataType = dataType;
+    res.xPos = hCfg.siteLoc(:,1);
+    res.zPos = hCfg.siteLoc(:,2);
+   
     %count up number of peaks and calculate mean MAD for each channel
     for i = 1:dataChan
         res.nPeak(i) = sum(ampHist(i,:));
@@ -207,6 +220,8 @@ fprintf( "total number of spikes: %d\n", numel(allTimes));
     res.mergedTimes = spikeTimes;
     res.mergedAmps = spikeAmps;
     res.mergedSites = spikeSites;
+
+    
     %build histograms of merged peaks
     mAmpHist = zeros(dataChan,nBit,'int32');
     for jChan = 1:dataChan
@@ -216,6 +231,9 @@ fprintf( "total number of spikes: %d\n", numel(allTimes));
     end
     res.mAmpHist = mAmpHist;
     save( fullfile(fileDir,outName), 'res' );
+    
+    %call allSpike to make summary data
+    allSpike_dist( fileDir, outName, zMin, zMax, exChan );
 
 end
 
@@ -374,12 +392,12 @@ function [spikeTimes, spikeAmps, spikeSites] = mergePeaks(allTimes, allAmps, all
     end
 
     % merge parfor output and sort
-    spikeTimes = jrclust.utils.neCell2mat(mergedTimes);
-    spikeAmps = jrclust.utils.neCell2mat(mergedAmps);
-    spikeSites = jrclust.utils.neCell2mat(mergedSites);
+    spikeTimes = neCell2mat(mergedTimes);
+    spikeAmps = neCell2mat(mergedAmps);
+    spikeSites = neCell2mat(mergedSites);
 
     [spikeTimes, argsort] = sort(spikeTimes); % sort by time
-    spikeAmps = jrclust.utils.tryGather(spikeAmps(argsort));
+    spikeAmps = tryGather(spikeAmps(argsort));
     spikeSites = spikeSites(argsort);
 end
 
@@ -389,7 +407,7 @@ function [timesOut, ampsOut, sitesOut] = mergeSpikesSite(spikeTimes, spikeAmps, 
     nLims = int32(abs(hCfg.refracIntSamp));
 
     % find neighboring spikes
-    nearbySites = jrclust.utils.findNearbySites(hCfg.siteLoc, iSite, hCfg.evtDetectRad); % includes iSite
+    nearbySites = findNearbySites(hCfg.siteLoc, iSite, hCfg.evtDetectRad); % includes iSite
     spikesBySite = arrayfun(@(jSite) find(spikeSites == jSite), nearbySites, 'UniformOutput', 0);
     timesBySite = arrayfun(@(jSite) spikeTimes(spikesBySite{jSite}), 1:numel(nearbySites), 'UniformOutput', 0);
     ampsBySite = arrayfun(@(jSite) spikeAmps(spikesBySite{jSite}), 1:numel(nearbySites), 'UniformOutput', 0);
@@ -449,4 +467,29 @@ function [timesOut, ampsOut, sitesOut] = mergeSpikesSite(spikeTimes, spikeAmps, 
     timesOut = iTimes(keepMe);
     ampsOut = iAmps(keepMe);
     sitesOut = repmat(int32(iSite), size(timesOut));
+end
+
+
+function varargout = tryGather(varargin)
+    %TRYGATHER Try to gather gpuArrays
+    for i = 1:nargin
+        if isa(varargin{i}, 'gpuArray')
+            varargout{i} = gather(varargin{i});
+            varargin{i} = [];
+        else
+            varargout{i} = varargin{i};
+        end
+    end
+end
+
+function mat_ = neCell2mat(cell_)
+    %NECELL2MAT Like cell2mat, but keeps only nonempty cells
+    nonempty = cellfun(@(x) ~isempty(x), cell_);
+    mat_ = cell2mat(cell_(nonempty));
+end
+
+function nearbySites = findNearbySites(siteLoc, iSite, evtDetectRad)
+    %FINDNEARBYSITES Get sites which are within evtDetectRad of iSite
+    dists = pdist2(siteLoc(iSite, :), siteLoc);
+    nearbySites = find(dists <= evtDetectRad);
 end
