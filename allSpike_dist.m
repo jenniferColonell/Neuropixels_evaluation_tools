@@ -202,14 +202,34 @@ normHist = allChan/totalCounts;
 
 
 
-figure(1);
+f1 = figure('Units','Centimeters','Position',[3,12,8,8]);
 plot(xVal, allChan);
 titleStr = sprintf('Amplitude Distribution for %s', fileName );
 title(titleStr, 'Interpreter', 'none');
 xlabel('amplitude (uV)');
 ylabel('number of spikes');
 
-figure(2);
+% bulid inverse CDF map for each channel
+% code from Nick Steinmetz,
+f1 = figure('Units','Centimeters','Position',[4,11,8,8]);
+cdf = single(cumsum(fliplr(res.mAmpHist),2));
+cdf = cdf/res.analyzedSec;  %convert to spike rates
+[nRow, nCol] = size(cdf);
+
+%flip back
+cdf = fliplr(cdf);
+
+depthX = 1:nRow;
+imagesc(xVal, depthX, cdf);
+xlabel('spike amplitude (uV)');
+ylabel('channel index');
+title('inverse cdf');
+set(gca,'YDir','normal');
+colorbar
+colormap(colormap_greyZero_blackred)
+caxis([0 20]);
+
+f3 = figure('Units','Centimeters','Position',[8,5,14,18]);
 subplot(3,1,1);
 plot(goodChanList, MAD_goodChan);
 titleStr = sprintf('est RMS' );
@@ -232,25 +252,7 @@ xlabel('channel index');
 ylabel('voltage at percentile (uV)');
 
 
-% bulid inverse CDF map for each channel
-% code from Nick Steinmetz,
-figure(3)
-cdf = single(cumsum(fliplr(res.mAmpHist),2));
-cdf = cdf/res.analyzedSec;  %convert to spike rates
-[nRow, nCol] = size(cdf);
 
-%flip back
-cdf = fliplr(cdf);
-
-depthX = 1:nRow;
-imagesc(xVal, depthX, cdf);
-xlabel('spike amplitude (uV)');
-ylabel('channel index');
-title('inverse cdf');
-set(gca,'YDir','normal');
-colorbar
-colormap(colormap_greyZero_blackred)
-caxis([0 20]);
 
 
 
