@@ -1,6 +1,6 @@
 This is a set of MATLAB tools for some basic evaluation of in vivo data from Neuropixels 1.0 or Neuropixels 2.0 probes.
 
-There are two MATLAB:
+There are two MATLAB scripts:
 
 detect_merge_peaks.m
 	-takes as input a .bin file from SpikeGLX and a tab delimited file of the site coordinates
@@ -22,7 +22,7 @@ To run these tools:
 	
 (1) If you have long recordings, use the SpikeGLX offline viewer export function to make a 10 minute subset.
 
-(2) Filter the data (and concatentate trials) using the CatGT tool (available here: http://billkarsh.github.io/SpikeGLX/#offline-analysis-tools). Edit the paths in 'CatGT_command.bat' to run on your data.
+(2) Filter the data (and concatentate trials) using the CatGT tool (available here: http://billkarsh.github.io/SpikeGLX/#offline-analysis-tools). Copy the file 'CatGT_command.bat', included in this repo, to your CatGT directory. Edit the paths in the bat file to run on your data. To get the details on the CatGT parameters, please read the CatGT ReadMe file.
 
 (3) Set parameters in detect_merge_peaks.m, specifically dataType, zMin and zMax to include in summaries, and which channels to exclude. If your recording only has a subset of the channels, set nchan and dataChan accordingly. Also, note that the XY coordinate file needs to match your recording. Run detect_merge_peaks.m.
 
