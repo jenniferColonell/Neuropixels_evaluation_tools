@@ -28,7 +28,7 @@ To run these tools:
 
 (2) Filter the data (and concatentate trials) using the CatGT tool (available here: http://billkarsh.github.io/SpikeGLX/#offline-analysis-tools). Copy the file 'CatGT_command.bat', included in this repo, to your CatGT directory. Edit the paths in the bat file to run on your data. To get the details on the CatGT parameters, please read the CatGT ReadMe file.
 
-(3) Set parameters in detect_merge_peaks.m, specifically dataType, zMin and zMax to include in summaries, and which channels to exclude. If your recording only has a subset of the channels, set nchan and dataChan accordingly. Also, note that the XY coordinate file needs to match your recording. Run detect_merge_peaks.m.
+(3) Set parameters in detect_merge_peaks.m, specifically dataType, zMin and zMax to include in summaries, and which channels to exclude. If your recording only has a subset of the channels, set nchan and dataChan accordingly. Also, note that the XY coordinate file needs to match your recording; you can create one from your SpikeGLX metadata file using SGLXMetaToCoords.m Run detect_merge_peaks.m.
 
 (4) Check the "est RMS" plot for channels with anomalously low signal. If you there channels you need to exclude, you can run allSpike_dist.m with a new set of excluded channels by editing the exChan list in line 20 of allspike_hist.m and running it -- a dialog will prompt you to select the correct <input filename>_peaks.mat file. You can also rerun allSpike_dist.m alone if you just want to regenerate the plots, without repeating peak detection.
 
@@ -36,6 +36,6 @@ The format of XY coordinate file is:
 
 channel\tX\tY
 
-with the X and Y positions given in microns. Two standard coordinate files are included, for bank 0 in a NP1.0 and NP2.0 probe.
+with the X and Y positions given in microns. Two standard coordinate files are included, for bank 0 in a NP1.0 and NP2.0 probe. Use SGLXMetaToCoords to create coordinate files for new patterns.
 
 
