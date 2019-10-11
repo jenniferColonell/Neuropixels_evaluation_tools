@@ -1,25 +1,34 @@
 function detect_merge_peaks( varargin )
 
-% 0 for neuropixels 1.0, 1 for NP 2.0. 
 if (length(varargin) == 0)
-    %If calling with no parameters, specify here
-    % 0 for neuropixels 1.0, 1 for NP 2.0. 
-    dataType = 0;
+    % probe type: NP1.0 = 1; NP2.0 SS = 21, NP2.0 = 24;
+    probeType = 24;
+    % If calling with no parameters, specify here
     % channels to exclude from histograms and summary statistics.
     % should exclude reference and "dead" channels
-    exChan = [191];
+    exChan = [127];
     % z range on probe to include in histogram and summary stats.
     % NP1.0 full z range = 0-3840 um
     % NP2.0 rull z range = 0-2880 um
     % To compare NP1.0 data to a similar tissue volume measured with NP2.0
     % set zMax = 3000.
     zMin = -inf;
-    zMax = 3000;    
+    zMax = inf;    
 else
     inputCell = varargin(1);
     dataType = inputCell{1};
 end
 
+% set dataType
+% 0 for neuropixels 1.0, 1 for NP 2.0. 
+if probeType == 1
+    dataType = 0;
+elseif (probeType == 21) || (probeType == 24)
+    dataType = 1;
+else
+    fprintf( "unknown probe type\n" );
+    return
+end
 
 %thresholding params
 bUseConstThresh = 1;
@@ -47,7 +56,7 @@ outName = [inName,'_peaks.mat'];
 
 
 
-% get coordinate file from user, chan, X, Y, tab delimited
+% get coordinate file from user, chan, X, Y, shank index, tab delimited
 % X coordiantes across shanks should reflect the distance between the
 % shanks. should include all channels in teh file (e.g. include the ref
 % channels, if present).
@@ -55,11 +64,13 @@ outName = [inName,'_peaks.mat'];
 [coordName,coordDir]=uigetfile('*.txt', 'Select coords file' );
 cID = fopen( fullfile(coordDir,coordName), 'r' );
 hCfg.siteLoc = zeros(dataChan,2);
+shank = zeros(dataChan,1);
 for i = 1:dataChan
     tline = fgetl(cID);
-    currDat = sscanf(tline, '%d%d%d');
+    currDat = sscanf(tline, '%d%d%d%d');
     hCfg.siteLoc(i,1) = currDat(2);
     hCfg.siteLoc(i,2) = currDat(3);
+    shank(i) = currDat(4);
 end
 fclose(cID);
 
@@ -205,8 +216,10 @@ fprintf( "total number of spikes: %d\n", numel(allTimes));
     res.qqFactor = qqFactor;
     res.analyzedSec = analyzedSec;
     res.dataType = dataType;
+    res.probeType = probeType;
     res.xPos = hCfg.siteLoc(:,1);
     res.zPos = hCfg.siteLoc(:,2);
+    res.shank = shank;
    
     %count up number of peaks and calculate mean MAD for each channel
     for i = 1:dataChan

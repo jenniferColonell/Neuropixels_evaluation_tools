@@ -16,8 +16,8 @@ function allSpike_dist( varargin )
 if (length(varargin) == 0)
     % if running standalone, set params here
     zMin = -inf;
-    zMax = 3000;
-    exChan = [191];
+    zMax = inf;
+    exChan = [127];
     % get thresholding results file from user
     [fileName,fileDir]=uigetfile('*.mat', 'Select threshold results file' );
 else
@@ -74,6 +74,7 @@ dataType = res.dataType;
 % Get site coords from thresholding results file
 xPos = res.xPos;
 zPos = res.zPos;
+shank = res.shank;
 
 inZRange = (zPos > zMin) & (zPos < zMax);
 
@@ -101,6 +102,7 @@ switch dataType
                 tempHist(goodChan,:) = origHist(i,:);
                 newZ(goodChan) = zPos(i);
                 newX(goodChan) = xPos(i);
+                newShank(goodChan) = shank(i);
             else
                 removeChan = [removeChan,i];
             end
@@ -112,6 +114,8 @@ switch dataType
         xPos = newX;
         zPos = [];
         zPos = newZ;
+        shank = [];
+        shank = newShank;
 
     case 1
         nBin = 16384;    %amplitudes will be histogrammed over all bits
@@ -124,6 +128,7 @@ switch dataType
                 tempHist(goodChan,:) = origHist(i,:);
                 newZ(goodChan) = zPos(i);
                 newX(goodChan) = xPos(i);
+                newShank(goodChan) = shank(i);
             else
                 removeChan = [removeChan,i]; 
             end
@@ -136,6 +141,8 @@ switch dataType
         xPos = newX;
         zPos = [];
         zPos = newZ;
+        shank = [];
+        shank = newShank;
         
         %now rebin the histograms so the bins are as close as possible to
         %NP1.0 bins        
@@ -171,7 +178,7 @@ xVal = uVPerBin*(0:nBin-1);
 %accumulate number of channels with 99th > "largeThresh"
 nLarge = 0;
 
-fprintf( chanOutID, 'X\tZ\t' );
+fprintf( chanOutID, 'shank\tX\tZ\t' );
 fprintf( chanOutID, 'chan\test RMS\teventRate\tampMod\t90th ptile\t99th ptile\n');
 
 currRate = zeros(size(MAD_goodChan));
@@ -184,15 +191,23 @@ for i = 1:goodChan
     curr90th(i) = xVal(pctileFromHist(res.ampHist(i,:),0.9));
     curr99th(i) = xVal(pctileFromHist(res.ampHist(i,:),0.99));    
     currRate(i) = sum(res.ampHist(i,:))/res.analyzedSec;
-    fprintf( chanOutID, '%d\t%d\t', xPos(i), zPos(i) );
+    fprintf( chanOutID, '%d\t%d\t%d\t', shank(i), xPos(i), zPos(i) );
     fprintf(chanOutID,'%d\t%.3f\t%.3f\t%.3f\t',goodChanList(i),MAD_goodChan(i),currRate(i),currMode);
     fprintf(chanOutID,'%.3f\t%.3f\n',curr90th(i),curr99th(i));
     if curr99th(i) > largeThresh
         nLarge = nLarge + 1;
     end
 end
+fclose(chanOutID);
 
+%for plotting resort in z, then x
+[~,zsorder] = sortrows([zPos;shank]',[2,1]);
 
+% checking plot order
+%  figure(101)
+%  plot(1:goodChan, zPos(zsorder))
+%  figure(102)
+%  plot(1:goodChan, xPos(zsorder))
 
 %sum along channel to get full histogram
 allChan = sum(res.ampHist,1)';    
@@ -219,8 +234,16 @@ cdf = cdf/res.analyzedSec;  %convert to spike rates
 %flip back
 cdf = fliplr(cdf);
 
+ampLimit = 1000;
+for i = 1:numel(xVal)
+    if xVal(i) > ampLimit
+        xMax = i;
+        break;
+    end
+end
+
 depthX = 1:nRow;
-imagesc(xVal, depthX, cdf);
+imagesc(xVal(1:xMax), depthX, cdf(:,(1:xMax)));
 xlabel('spike amplitude (uV)');
 ylabel('channel index');
 title('inverse cdf');
@@ -231,32 +254,30 @@ caxis([0 20]);
 
 f3 = figure('Units','Centimeters','Position',[8,5,14,18]);
 subplot(3,1,1);
-plot(goodChanList, MAD_goodChan);
+plot(1:numel(goodChanList), MAD_goodChan(zsorder));
 titleStr = sprintf('est RMS' );
 title(titleStr, 'Interpreter', 'none');
-xlabel('channel index');
+xlabel('channels sorted by shank, then z');
 ylabel('estimated rms (uV)');
 
 subplot(3,1,2);
-plot(goodChanList, currRate);
+plot(1:numel(goodChanList), currRate(zsorder));
 titleStr = sprintf('Event Rate' );
 title(titleStr, 'Interpreter', 'none');
-xlabel('channel index');
+xlabel('channels sorted by shank, then z');
 ylabel('event rate (Hz)');
 
 subplot(3,1,3);
-plot(goodChanList, curr90th, goodChanList, curr99th);
+plot(1:numel(goodChanList), curr90th(zsorder), 1:numel(goodChanList), curr99th(zsorder));
 titleStr = sprintf('90th (blue) and 99th (orange) percentile' );
 title(titleStr, 'Interpreter', 'none');
-xlabel('channel index');
+xlabel('channels sorted by shank, then z');
 ylabel('voltage at percentile (uV)');
 
 
-
-
-
-
-
+if isfield(res, 'probeType' )
+    plotChanFiles( res.probeType, fullfile(fileDir,chanOutName) );
+end
 
 fprintf( histID, 'uV\thistCounts\tnormHist\n');
 for i = 1:nBin
@@ -310,7 +331,7 @@ fprintf( outID, '%s\t%.3f\t%.3f\t%.3f\t%.3f\t%d\t%.3f\t%.3f\t%.3f\t%.3f\n', ...
 
 fclose(histID);
 fclose(outID);
-fclose(chanOutID);
+
 end
 
 function [histPctile] = pctileFromHist( hData, p )

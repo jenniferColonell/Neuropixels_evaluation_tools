@@ -1,9 +1,13 @@
 This is a set of MATLAB tools for some basic evaluation of in vivo data from Neuropixels 1.0 or Neuropixels 2.0 probes.
 
-There are two MATLAB scripts:
+There are three MATLAB scripts:
+
+SGLXMetaToCoords.m
+	-takes as input a SpikeGLX metadata file
+	-outputs coordinates for the sites in the format specified by "outType", in line 12 of the script. For coordinate files to use with detect_merge_peaks, set outType=0; script can also make input for Kilosort and JRClust.
 
 detect_merge_peaks.m
-	-takes as input a .bin file from SpikeGLX and a tab delimited file of the site coordinates
+	-takes as input a .bin file from SpikeGLX and a tab delimited file of the site coordinates (created by SGLXMetsToCoords.m)
 	-calculates median absolute deviation for each channel in the data
 	-thresholds the data (use a constant threshold for running probe comparisons)
 	-merges peaks that occur close in space and time into "events" using the JRClust peak_merge algorithm
