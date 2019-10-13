@@ -2,7 +2,7 @@ function detect_merge_peaks( varargin )
 
 if (length(varargin) == 0)
     % probe type: NP1.0 = 1; NP2.0 SS = 21, NP2.0 = 24;
-    probeType = 24;
+    probeType = 21;
     % If calling with no parameters, specify here
     % channels to exclude from histograms and summary statistics.
     % should exclude reference and "dead" channels
@@ -16,7 +16,7 @@ if (length(varargin) == 0)
     zMax = inf;    
 else
     inputCell = varargin(1);
-    dataType = inputCell{1};
+    probeType = inputCell{1};
 end
 
 % set dataType
