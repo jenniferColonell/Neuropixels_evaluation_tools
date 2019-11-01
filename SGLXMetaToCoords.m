@@ -88,26 +88,27 @@ switch outType
     
     case 2  %strings to copy into JRC prm file
        newName = [fname,'_forJRCprm.txt'];
-       nchan = numel(chans);
-       shankind = shankind + 1;     % switch to 1-based for MATLAB
+       nchan = numel(chans);    
        fid = fopen( newName, 'w' );     
        fprintf( fid, 'shankMap = [' );       
        for i = 1:nchan-1
-           fprintf( fid, '%d,', shankind(i) );
+           fprintf( fid, '%d,', shankind(i) + 1 ); % switch to 1-based for MATLAB
        end
-       fprintf( fid, '%d]\n',shankind(nchan) );
+       fprintf( fid, '%d];\n',shankind(nchan) + 1 );
+       
+       xcoords = shankind*shankSep + xcoords; 
        
        fprintf( fid, 'siteLoc = [' );
        for i = 1:nchan-1
            fprintf(fid, '%d,%d;', xcoords(i), ycoords(i));
        end
-       fprintf( fid, '%d,%d]\n', xcoords(nchan), ycoords(nchan) );
+       fprintf( fid, '%d,%d];\n', xcoords(nchan), ycoords(nchan) );
        
        fprintf( fid, 'siteMap = [' );
        for i = 1:nchan-1
            fprintf( fid, '%d,', chans(i) );
        end
-       fprintf( fid, '%d]\n', chans(nchan) );
+       fprintf( fid, '%d];\n', chans(nchan) );
        fclose(fid);
 end
 
