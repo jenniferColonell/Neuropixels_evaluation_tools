@@ -1,13 +1,13 @@
 % 
-% for a Neuropixels 1.0 or 2.0 metadata file, 
-% write out coordinates: channel, x, y into a tab delimited text file
-% or make coordinate input appropriate for JRClust or Kilosort
+% Write out coordinates for a Neuropixels 3A, 1.0 or 2.0 metadata file.
+% Format selected with the outType variable.
+% Jennifer Colonell, Janelia Research Campus
 % 
 function SGLXMetaToCoords()
 
 
 % Output selection: 0 for text coordinate file; 
-%                   1 for KS2 channel map file;
+%                   1 for Kilosort or Kilosort2 channel map file;
 %                   2 for strings to paste into JRClust .prm file
 outType = 0;
 
@@ -151,16 +151,12 @@ function [elecInd, shankInd, bankMask, connected] = NP20_ElecInd(meta)
     if pType == 21
         % Single shank probe
         % imro table entries: (channel, bank, refType, electrode #)
-        C = textscan(meta.imroTbl, '(%*s %d %*s %d', ...
+        C = textscan(meta.imroTbl, '(%d %d %*s %d', ...
             'EndOfLine', ')', 'HeaderLines', 1 );
-        elecInd = int32(cell2mat(C(2)));
-        bankMask = int32(cell2mat(C(1)));
+        chan = double(cell2mat(C(1)));
+        elecInd = int32(cell2mat(C(3)));
+        bankMask = int32(cell2mat(C(2)));
         shankInd = zeros(size(elecInd));
-        connected = ones(size(elecInd));
-        exChan = findDisabled(meta);        
-        for i = 1:numel(exChan)        	
-            connected(elecInd == exChan(i)) = 0;
-        end
         
     else
         % 4 shank probe
@@ -171,13 +167,15 @@ function [elecInd, shankInd, bankMask, connected] = NP20_ElecInd(meta)
         elecInd = int32(cell2mat(C(4)));
         bankMask = int32(cell2mat(C(3)));
         shankInd = double(cell2mat(C(2)));
-        connected = ones(size(chan));
-        exChan = findDisabled(meta);
-        %exChan = [127];
-        for i = 1:numel(exChan)       	
-            connected(chan == exChan(i)) = 0;
-        end
+        
     end
+    
+    connected = ones(size(chan));
+    exChan = findDisabled(meta);
+    for i = 1:numel(exChan)       	
+        connected(chan == exChan(i)) = 0;
+    end
+    
 end % NP20_ElecInd
 
 
