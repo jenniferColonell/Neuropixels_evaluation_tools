@@ -7,7 +7,6 @@
 %     1 for Kilosort or Kilosort2 channel map file;
 %     2 for strings to paste into JRClust .prm file
 %
-% Format selected with the outType variable
 % File is saved in current working directory 
 %
 % Jennifer Colonell, Janelia Research Campus
