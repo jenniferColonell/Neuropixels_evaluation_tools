@@ -1,15 +1,22 @@
 % 
 % Write out coordinates for a Neuropixels 3A, 1.0 or 2.0 metadata file.
-% Format selected with the outType variable.
+%
+% Format selected with the outType variable
+%     0 for tab delimited text coordinate file: 
+%       chan index, x in um, y in um, shank index 
+%     1 for Kilosort or Kilosort2 channel map file;
+%     2 for strings to paste into JRClust .prm file
+%
+% Format selected with the outType variable
+% File is saved in current working directory 
+%
 % Jennifer Colonell, Janelia Research Campus
 % 
 function SGLXMetaToCoords()
 
 
-% Output selection: 0 for text coordinate file; 
-%                   1 for Kilosort or Kilosort2 channel map file;
-%                   2 for strings to paste into JRClust .prm file
-outType = 0;
+% Output selection:
+outType = 1;
 
 % Ask user for metadata file
 [metaName,path] = uigetfile('*.meta', 'Select Metadata File');
@@ -26,7 +33,7 @@ else
     pType = 0; %3A probe
 end
 
-if pType <= 1
+if pType <= 1 || pType == 1100 || pType == 1300  %type 1100 = UHD probe with one bank, 1300 = OPTO
     
     %Neuropixels 1.0 or 3A probe
     [elecInd, connected] = NP10_ElecInd(meta);
@@ -41,8 +48,13 @@ if pType <= 1
     shankind = zeros(size(elecInd));
     
     % Get XY coords for saved channels
-    [xcoords, ycoords] = XYCoord10(meta, elecInd);
-    
+    if pType == 0
+        [xcoords, ycoords] = XYCoord10(meta, elecInd);
+    elseif pType == 1100
+        [xcoords, ycoords] = XYCoord1100(meta, elecInd);
+    elseif pType == 1300
+        [xcoords, ycoords] = XYCoord1300(meta, elecInd);
+    end
    
 else
 
@@ -169,12 +181,7 @@ function [elecInd, shankInd, bankMask, connected] = NP20_ElecInd(meta)
         shankInd = double(cell2mat(C(2)));
         
     end
-    
-    connected = ones(size(chan));
-    exChan = findDisabled(meta);
-    for i = 1:numel(exChan)       	
-        connected(chan == exChan(i)) = 0;
-    end
+    connected = findDisabled(meta);
     
 end % NP20_ElecInd
 
@@ -212,10 +219,8 @@ function [elecInd, connected] = NP10_ElecInd(meta)
     chan = double(cell2mat(C(1)));
     bank = double(cell2mat(C(2)));
     elecInd = bank*384 + chan;
-    connected = ones(size(chan));
-    for i = 1:numel(exChan)       	
-        connected(chan == exChan(i)) = 0;
-    end
+    connected = findDisabled(meta);
+
     
 end % NP10_ElecInd
 
@@ -228,22 +233,15 @@ end % NP10_ElecInd
 % instance of the 'EndofLine' character -- here, ')'
 % 'HeaderLines' = 1 skips the initial entry in the table with
 % the number of shanks, columns, and rows
-function [exChan] = findDisabled(meta)     
+function [connected] = findDisabled(meta)     
     % read in the shank map    
     C = textscan(meta.snsShankMap, '(%d:%d:%d:%d', ...
             'EndOfLine', ')', 'HeaderLines', 1 );
     enabled = double(cell2mat(C(4)));
-    % There's an entry in the shank map for each saved channel.
-    % Get the array of saved channels:
-    chan = OriginalChans(meta);
-    % Find out how many are non-SY chans
-    [AP,~,~] = ChannelCountsIM(meta);
-    exChan = [];
-    for i = 1:AP
-        if enabled(i) == 0
-            exChan = [exChan, chan(i)];
-        end
-    end
+    % There's an entry in the shank map for each saved channel,
+    % so connected is just that set of enabled flags.
+    connected = enabled;
+
 end % findDisabled
 
 % =========================================================
@@ -338,6 +336,73 @@ function [xCoord, yCoord] = XYCoord10(meta, elecInd)
     
 end % XY10Coord
 
+% =========================================================
+% Return x y coords for electrode index type 1100 (UHD)
+%
+% 
+function [xCoord, yCoord] = XYCoord1100(meta, elecInd)   
+
+    nElec = 384;   %per shank; pattern repeats for the four shanks
+    vSep = 6;   % in um
+    hSep = 6;
+
+    elecPos = zeros(nElec, 2);
+    
+    for i = 0:7
+        ind = (i:8:nElec);
+        elecPos(ind+1,1) = i*hSep;
+        rowind = floor(ind/8);
+        elecPos(ind+1,2) = rowind*vSep;
+    end
+    
+    xCoord = elecPos(elecInd+1,1);
+    yCoord = elecPos(elecInd+1,2);
+    
+    % single shank probe. Plot only lowest selected electrode
+    figure(1)
+    % plot all positions
+    scatter( elecPos(:,1), elecPos(:,2), 150, 'k', 'square' ); hold on;
+    scatter( xCoord, yCoord, 100, 'b', 'square', 'filled' );hold on;   
+    xlim([0,70]);
+    ylim([-10,8000]);
+    title('NP 1.0 single shank view');
+    hold off;
+    
+end % XY1100Coord
+
+
+% =========================================================
+% Return x y coords for electrode index for 1.0 probes
+%
+% 
+function [xCoord, yCoord] = XYCoord1300(meta, elecInd)   
+
+    nElec = 960;   %per shank; pattern repeats for the four shanks
+    vSep = 20;   % in um
+    hSep = 48;
+
+    elecPos = zeros(nElec, 2);
+    
+    elecPos(1:2:end,1) = 0;            %sites 0,2,4...
+    elecPos(2:2:end,1) = hSep;         %sites 1,3,5...
+    
+    % fill in y values        
+    elecPos(1:end,2) = floor((0:nElec-1)/2) * vSep;       %all sites
+ 
+    xCoord = elecPos(elecInd+1,1);
+    yCoord = elecPos(elecInd+1,2);
+    
+    % single shank probe. Plot only lowest selected electrode
+    figure(1)
+    % plot all positions
+    scatter( elecPos(:,1), elecPos(:,2), 150, 'k', 'square' ); hold on;
+    scatter( xCoord, yCoord, 100, 'b', 'square', 'filled' );hold on;   
+    xlim([0,70]);
+    ylim([-10,8000]);
+    title('NP 1.0 single shank view');
+    hold off;
+    
+end % XY10Coord
 
 % =========================================================
 % Return array of original channel IDs. As an example,
