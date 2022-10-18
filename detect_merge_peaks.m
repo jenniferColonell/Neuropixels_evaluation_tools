@@ -2,11 +2,11 @@ function detect_merge_peaks( varargin )
 
 if (length(varargin) == 0)
     % probe type: NP1.0 = 1; NP2.0 SS = 21, NP2.0 = 24;
-    probeType = 21;
+    probeType = 1;
     % If calling with no parameters, specify here
     % channels to exclude from histograms and summary statistics.
     % should exclude reference and "dead" channels
-    exChan = [127];
+    exChan = [191];
     % z range on probe to include in histogram and summary stats.
     % NP1.0 full z range = 0-3840 um
     % NP2.0 rull z range = 0-2880 um

@@ -15,7 +15,7 @@ function SGLXMetaToCoords()
 
 
 % Output selection:
-outType = 1;
+outType = 0;
 
 % Ask user for metadata file
 [metaName,path] = uigetfile('*.meta', 'Select Metadata File');
