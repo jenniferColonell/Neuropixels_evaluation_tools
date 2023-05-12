@@ -1,10 +1,12 @@
 This is a set of MATLAB tools for some basic evaluation of in vivo data from Neuropixels 1.0 or Neuropixels 2.0 probes.
 
-There are three MATLAB scripts:
+To run these, first download the tool to generate the site coordinate files for your data:
 
-SGLXMetaToCoords.m
+SGLXMetaToCoords.m (https://github.com/jenniferColonell/SGLXMetaToCoords)
 	-takes as input a SpikeGLX metadata file
 	-outputs coordinates for the sites in the format specified by "outType", in line 12 of the script. For coordinate files to use with detect_merge_peaks, set outType=0; script can also make input for Kilosort and JRClust.
+
+Scripts in this repo (https://github.com/jenniferColonell/Neuropixels_evaluation_tools)
 
 detect_merge_peaks.m
 	-takes as input a .bin file from SpikeGLX and a tab delimited file of the site coordinates (created by SGLXMetsToCoords.m)
@@ -22,20 +24,24 @@ allSpike_dist.m
 	-outputs summary stats about the amplitude distribution, estimated rms, etc, in <input filename>_sum.txt
 	-outputs the histogram of amplitudes in <input filename>_hist.txt
 
+meas_peak_to_peak.m
+	-input: raw data (unfiltered) and tab delimited file of site coordinates (created by SGLXMetsToCoords.m)
+	-output: median and peak to peak voltages for each channel in <run_name>_PtoP_chan.txt
+
 To run these tools:
-	
-(1) If you have long recordings, use the SpikeGLX offline viewer export function to make a 10 minute subset.
 
-(2) Filter the data (and concatentate trials) using the CatGT tool (available here: http://billkarsh.github.io/SpikeGLX/#offline-analysis-tools). Copy the file 'CatGT_command.bat', included in this repo, to your CatGT directory. Edit the paths in the bat file to run on your data. To get the details on the CatGT parameters, please read the CatGT ReadMe file.
+(1) Filter the data (and concatentate trials) using the CatGT tool (available here: http://billkarsh.github.io/SpikeGLX/#offline-analysis-tools). Copy the file 'CatGT_eval_tool.bat', included in this repo, to your CatGT directory. Edit the paths in the bat file to run on your data. To process a portion of a long recording, use the CatGT parameters startsecs and maxsecs. To get the details on the CatGT parameters, please read the CatGT ReadMe file. 
 
-(3) Set parameters in detect_merge_peaks.m, specifically dataType, zMin and zMax to include in summaries, and which channels to exclude. If your recording only has a subset of the channels, set nchan and dataChan accordingly. Also, note that the XY coordinate file needs to match your recording; you can create one from your SpikeGLX metadata file using SGLXMetaToCoords.m Run detect_merge_peaks.m.
+(2) Set parameters in detect_merge_peaks.m, specifically probeType, zMin and zMax to include in summaries, and which channels to exclude. If your recording only has a subset of the channels, set nchan and dataChan accordingly. Also, note that the XY coordinate file needs to match your recording; you can create one from your SpikeGLX metadata file using SGLXMetaToCoords.m Run detect_merge_peaks.m.
 
-(4) Check the "est RMS" plot for channels with anomalously low signal. If you there channels you need to exclude, you can run allSpike_dist.m with a new set of excluded channels by editing the exChan list in line 20 of allspike_hist.m and running it -- a dialog will prompt you to select the correct <input filename>_peaks.mat file. You can also rerun allSpike_dist.m alone if you just want to regenerate the plots, without repeating peak detection.
+(3) Check the "est RMS" plot for channels with anomalously low signal. If you there channels you need to exclude, you can run allSpike_dist.m with a new set of excluded channels by editing the exChan list in line 20 of allspike_hist.m and running it -- a dialog will prompt you to select the correct <input filename>_peaks.mat file. You can also rerun allSpike_dist.m alone if you just want to regenerate the plots, without repeating peak detection.
 
 The format of XY coordinate file is:
 
 channel\tX\tY
 
 with the X and Y positions given in microns. Two standard coordinate files are included, for bank 0 in a NP1.0 and NP2.0 probe. Use SGLXMetaToCoords to create coordinate files for new patterns.
+
+meas_peak_to_peak.m is run separately on the raw data, to assess dyanmic range and voltage offset.
 
 

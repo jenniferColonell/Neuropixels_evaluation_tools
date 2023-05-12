@@ -1,12 +1,15 @@
 function detect_merge_peaks( varargin )
 
 if (length(varargin) == 0)
-    % probe type: NP1.0 = 1; NP2.0 SS = 21, NP2.0 = 24;
-    probeType = 21;
+    % probe type: NP1.0 = 1; NP2.0 SS = 21, NP2.0 = 24; NP Ph2B = 2013
+    probeType = 2013;
     % If calling with no parameters, specify here
     % channels to exclude from histograms and summary statistics.
-    % should exclude reference and "dead" channels
-    exChan = [127];
+    % should exclude reference and "dead" channels.
+    % 1.0 reference channel = 191
+    % 2.0 reference channel = 127
+    % Ph2B has no reference channels
+    exChan = [];
     % z range on probe to include in histogram and summary stats.
     % NP1.0 full z range = 0-3840 um
     % NP2.0 rull z range = 0-2880 um
@@ -25,10 +28,19 @@ if probeType == 1
     dataType = 0;
 elseif (probeType == 21) || (probeType == 24)
     dataType = 1;
+elseif (probeType == 2013)
+    dataType = 2;
 else
     fprintf( "unknown probe type\n" );
     return
 end
+
+% number of data channels; if saving all, nchan = 385, dataChan = 384
+nchan = 385;
+dataChan = 384;
+
+startTime = 0.1; %in seconds; will start pulling data at this time
+maxTime = 300; %in sec; will analyze startTime to startTime + maxTime
 
 %thresholding params
 bUseConstThresh = 1;
@@ -38,12 +50,6 @@ qqFactor = 5; % for JRClust-style thresholding; ignored if bUseConstThresh = 1
 %other params for JRClust type merging
 hCfg.evtDetectRad = 50; %in um, distance to look for duplicate peaks
 hCfg.refracIntSamp = 7; %in samples, distance in time to look for duplicat peaks
-
-% for either data type
-nchan = 385;
-dataChan = 384;
-
-maxTime = 600; %in sec; takes the first maxTime seconds in the file
 
 % get data file from user. 
 [fileName,fileDir]=uigetfile('*.bin', 'Select file' );
@@ -74,8 +80,12 @@ for i = 1:dataChan
 end
 fclose(cID);
 
+%remove coordinate entries for excluded channels
+hCfg.siteLoc(exChan,:) = [];
+shank(exChan) = [];
 
-
+%size arrays for the number of channels we'll use
+dataChan = dataChan - numel(exChan);
 
 switch dataType
     
@@ -88,6 +98,11 @@ switch dataType
         fs = 30000;
         nBit = 16384;    %amplitudes will be histogrammed over all bits
         uVPerBit = 0.7629;
+
+    case 2
+        fs = 30000;
+        nBit = 4096;
+        uVPerBit = 1e6*((2*0.62)/100)/(2*2048); % range = +/- 0.62 V, gain = 100, maxInt = 2048 => 2*2048 bits total
         
     otherwise
         fprintf( 'unknown dataType\n' );
@@ -105,7 +120,8 @@ edges = (0:nBit);   %nBit+1 edges -> nBit bins. Overflow goes to top/bottom bin
     
     fm = memmapfile(fullfile(fileDir,fileName),'Format','int16');
     
-    maxBatchBytes = 1e8;
+    %maxBatchBytes = 1e8;
+    maxBatchBytes = 5e7;
     maxBatchSamples = floor(maxBatchBytes/(nchan*2));
     batchBytes = maxBatchSamples*nchan*2;
     
@@ -115,17 +131,26 @@ edges = (0:nBit);   %nBit+1 edges -> nBit bins. Overflow goes to top/bottom bin
     fprintf('Run length in seconds: %.2f\n',runSec);
 
     fileSamples = fileSize/(nchan*2);
+    startSamples = startTime*fs;
+    startBytes = startSamples*nchan*2;
     
-    if runSec < maxTime
-        nBatch = floor(fileSamples/maxBatchSamples) + 1;
+    
+    if runSec <= startTime
+        fprintf( "Run too short to analyze with startTime = %.0f\n", startTime );
+        return;
+    elseif runSec <= (startTime + maxTime)
+        % get all data after the initial startTime
+        nBatch = floor((fileSamples - startSamples)/maxBatchSamples) + 1;
     else
         useSamples = maxTime*fs;
         nBatch = floor(useSamples/maxBatchSamples) + 1;
     end
-        
+    
     batchSamples = maxBatchSamples;
+    % reset maxTime to be what actually gets used
+    maxTime = batchSamples*(nBatch-1)/fs;
 
-    fprintf('nBatch, batchSamples: %d, %d\n', nBatch, batchSamples );
+    fprintf('nBatch, batchSamples, maxTime: %d, %d, %.1f\n', nBatch, batchSamples, maxTime );
     
     %will be processing the nBatch-1 "full" batches (saves complexity)
     analyzedSec = (nBatch-1)*batchSamples/fs;
@@ -137,7 +162,7 @@ edges = (0:nBit);   %nBit+1 edges -> nBit bins. Overflow goes to top/bottom bin
 
     ampHist = zeros(dataChan,nBit,'int32');   
     tempHist = zeros(1,nBit,'int32');
-    
+        
     %Note -- should we try to preallocate space for these?
     %Would need a way to estimate the number of spikes
     %Could consider stopping after some number of spikes are reached.
@@ -167,12 +192,17 @@ edges = (0:nBit);   %nBit+1 edges -> nBit bins. Overflow goes to top/bottom bin
     
 tic
     batch16bit = batchBytes/2;
+    start16bit = startBytes/2;
+    
     for i = 1:nBatch-1
          fprintf( 'Reading batch: %d of %d\n', i, nBatch-1 );
-         batchOffset = int64((i-1)*batch16bit) + 1;
+         batchOffset = start16bit + int64((i-1)*batch16bit) + 1;
          dataArray = fm.Data(batchOffset:batchOffset+batch16bit-1);
          dataArray = reshape(dataArray,sizeA);
-        
+         
+         % Remove data for excluded channels
+         dataArray(exChan,:) = [];
+         
          % Calculate thresholds for this batch, want to get the MAD result
          % even if using constant threshold
          for jChan = 1:dataChan
@@ -182,7 +212,7 @@ tic
          %for each channel, find peaks (using JRClust algorithm) and add into
          %histogram   
          
-         batchPeaks = 0;
+         batchTotal = 0;
          batchStart = (i-1)*batchSamples + 1; %one based for matlab
          for jChan = 1:dataChan
              if bUseConstThresh
@@ -196,11 +226,11 @@ tic
              currSites = jChan*ones(1,numel(peaks));
              allSites = [allSites,currSites];
              [tempHist, ~] = (histcounts(amps, edges));
-             ampHist(jChan,:) = ampHist(jChan,:) + int32(tempHist);
-             batchPeaks = batchPeaks + numel(peaks);
+             ampHist(jChan,:) = ampHist(jChan,:) + int32(tempHist);            
+             batchTotal = batchTotal + numel(peaks);
 
          end
-         fprintf('number of peaks: %d\n', batchPeaks);
+         fprintf('number of peaks: %d\n', batchTotal);
          clear('dataArray');
     end
 
@@ -235,14 +265,15 @@ fprintf( "total number of spikes: %d\n", numel(allTimes));
     locCluster = parcluster('local');
     parpool('local',locCluster.NumWorkers);
     end
-    [spikeTimes, spikeAmps, spikeSites] = mergePeaks(allTimes, allAmps, allSites, dataChan, hCfg);
+    [spikeTimes, spikeAmps, spikeSites, spikeFootprint] = mergePeaks(allTimes, allAmps, allSites, dataChan, hCfg);
     
     res.mergedTimes = spikeTimes;
     res.mergedAmps = spikeAmps;
     res.mergedSites = spikeSites;
+    res.mergedFoot = spikeFootprint;
 
     
-    %build histograms of merged peaks
+    %build amplitude histograms of merged peaks
     mAmpHist = zeros(dataChan,nBit,'int32');
     for jChan = 1:dataChan
         amps = spikeAmps(spikeSites == jChan);
@@ -250,10 +281,24 @@ fprintf( "total number of spikes: %d\n", numel(allTimes));
         mAmpHist(jChan,:) = mAmpHist(jChan,:) + int32(tempHist);
     end
     res.mAmpHist = mAmpHist;
+    
+    %build time histogrms of merged spikes
+    batchSec = 10;
+    binEdges = (0:batchSec*fs:maxTime*fs);
+    nBin = numel(binEdges) - 1;
+    mTimeHist = zeros(dataChan,nBin,'int32');
+    for jChan = 1:dataChan
+        times = spikeTimes(spikeSites == jChan);
+        mTimeHist(jChan,:) = histcounts(times,binEdges);      
+    end
+    res.mTimeHist = mTimeHist;
     save( fullfile(fileDir,outName), 'res' );
     
     %call allSpike to make summary data
-    allSpike_dist( fileDir, outName, zMin, zMax, exChan );
+    %since we've removed all the data from excluded channels, don't send
+    %those
+    sumExChan = [];
+    allSpike_dist( fileDir, outName, zMin, zMax, sumExChan );
 
 end
 
@@ -377,7 +422,7 @@ function [peaks, amps] = findPeaks(samplesIn, thresh, nneighBelow, fs)
 end
 
 
-function [spikeTimes, spikeAmps, spikeSites] = mergePeaks(allTimes, allAmps, allSites, nSites, hCfg)
+function [spikeTimes, spikeAmps, spikeSites, spikeFootprint] = mergePeaks(allTimes, allAmps, allSites, nSites, hCfg)
     %adapted from JRC, alpha 4.0, commit 4280a02
     %MERGEPEAKS Merge duplicate peak events
     spikeTimes = allTimes';
@@ -389,12 +434,12 @@ function [spikeTimes, spikeAmps, spikeSites] = mergePeaks(allTimes, allAmps, all
     spikeSites = int32(spikeSites(argsort));
     spikeTimes = int32(spikeTimes);
 
-    [mergedTimes, mergedAmps, mergedSites] = deal(cell(nSites,1));
+    [mergedTimes, mergedAmps, mergedSites, mergedFoot] = deal(cell(nSites,1));
 
     try
         parfor iSite = 1:nSites
             try
-                [mergedTimes{iSite}, mergedAmps{iSite}, mergedSites{iSite}] = ...
+                [mergedTimes{iSite}, mergedAmps{iSite}, mergedSites{iSite}, mergedFoot{iSite}] = ...
                     mergeSpikesSite(spikeTimes, spikeAmps, spikeSites, iSite, hCfg);
             catch ME% don't try to display an error here
                warning('failed to use parallel pool %d: %s', iSite, ME.message);
@@ -403,7 +448,7 @@ function [spikeTimes, spikeAmps, spikeSites] = mergePeaks(allTimes, allAmps, all
     catch % parfor failure
         for iSite = 1:nSites
             try
-                [mergedTimes{iSite}, mergedAmps{iSite}, mergedSites{iSite}] = ...
+                [mergedTimes{iSite}, mergedAmps{iSite}, mergedSites{iSite}, mergedFoot{iSite}] = ...
                     mergeSpikesSite(spikeTimes, spikeAmps, spikeSites, iSite, hCfg);
             catch ME
                 warning('failed to merge spikes on site %d: %s', iSite, ME.message);
@@ -415,14 +460,16 @@ function [spikeTimes, spikeAmps, spikeSites] = mergePeaks(allTimes, allAmps, all
     spikeTimes = neCell2mat(mergedTimes);
     spikeAmps = neCell2mat(mergedAmps);
     spikeSites = neCell2mat(mergedSites);
+    spikeFootprint = neCell2mat(mergedFoot);
 
     [spikeTimes, argsort] = sort(spikeTimes); % sort by time
     spikeAmps = tryGather(spikeAmps(argsort));
     spikeSites = spikeSites(argsort);
+    spikeFootprint = spikeFootprint(argsort);
 end
 
 %% LOCAL FUNCTIONS
-function [timesOut, ampsOut, sitesOut] = mergeSpikesSite(spikeTimes, spikeAmps, spikeSites, iSite, hCfg)
+function [timesOut, ampsOut, sitesOut, footprintOut] = mergeSpikesSite(spikeTimes, spikeAmps, spikeSites, iSite, hCfg)
     %MERGESPIKESSITE Merge spikes in the refractory period
     nLims = int32(abs(hCfg.refracIntSamp));
 
@@ -431,21 +478,27 @@ function [timesOut, ampsOut, sitesOut] = mergeSpikesSite(spikeTimes, spikeAmps, 
     spikesBySite = arrayfun(@(jSite) find(spikeSites == jSite), nearbySites, 'UniformOutput', 0);
     timesBySite = arrayfun(@(jSite) spikeTimes(spikesBySite{jSite}), 1:numel(nearbySites), 'UniformOutput', 0);
     ampsBySite = arrayfun(@(jSite) spikeAmps(spikesBySite{jSite}), 1:numel(nearbySites), 'UniformOutput', 0);
+    sitesBySite = arrayfun(@(jSite) spikeSites(spikesBySite{jSite}), 1:numel(nearbySites), 'UniformOutput', 0);
 
-    iiSite = (nearbySites == iSite);
-    iSpikes = spikesBySite{iiSite};
-    iTimes = timesBySite{iiSite};
-    iAmps = ampsBySite{iiSite};
+    % spikesBySite is a cell array, with one cell for each site in the
+    % "nearby" defined by evtDetectRad
+    % Each cell contains an array of indicies into the spike table for spikes on that site.
+
+    iiSite = (nearbySites == iSite);    % which site is our target
+    iSpikes = spikesBySite{iiSite};     % iSpikes = indicies for spikes on the target site
+    iTimes = timesBySite{iiSite};       % iTimes = spike times for spikes on the target site
+    iAmps = ampsBySite{iiSite};         % iAmps = spike amplitudes for spikes on the target site
 
     % search over peaks on neighboring sites and in refractory period to
     % see which peaks on this site to keep
     keepMe = true(size(iSpikes));
-    for jjSite = 1:numel(spikesBySite)
-        jSite = nearbySites(jjSite);
+    tempFoot = ones(size(iSpikes));   %count of number of sites on which the spike appears; always on at least 1
+    for jjSite = 1:numel(spikesBySite)  % loop over the nearby sites
+        jSite = nearbySites(jjSite); % which site is this globally
 
         jSpikes = spikesBySite{jjSite};
-        jTimes = timesBySite{jjSite};
-        jAmps = ampsBySite{jjSite};
+        jTimes = timesBySite{jjSite}; % list of times for this site
+        jAmps = ampsBySite{jjSite};   % list of amplitudes for this site
 
         if iSite == jSite
             delays = [-nLims:-1, 1:nLims]; % skip 0 delay
@@ -462,7 +515,7 @@ function [timesOut, ampsOut, sitesOut] = mergeSpikesSite(spikeTimes, spikeAmps, 
             end
 
             % jLocs: index into j{Spikes,Times,Amps}
-            % iLocs: (1st) corresponding index into i{Spikes,Times,Amps}/keepMe
+            % iLocs: (1st) corresponding index into i{Spikes,Times,Amps} and keepMe
             jLocs = find(jLocs);
             iLocs = iLocs(jLocs);
 
@@ -480,6 +533,13 @@ function [timesOut, ampsOut, sitesOut] = mergeSpikesSite(spikeTimes, spikeAmps, 
                     keepMe(iLocs(ampsEqual)) = 0;
                 end
             end
+            
+
+            nearbySmaller = abs(jAmps(jLocs)) <= abs(iAmps(iLocs));           
+            tempFoot(iLocs(nearbySmaller)) = tempFoot(iLocs(nearbySmaller)) + 1;
+
+             
+            
         end
     end
 
@@ -487,6 +547,15 @@ function [timesOut, ampsOut, sitesOut] = mergeSpikesSite(spikeTimes, spikeAmps, 
     timesOut = iTimes(keepMe);
     ampsOut = iAmps(keepMe);
     sitesOut = repmat(int32(iSite), size(timesOut));
+    footprintOut = int32(tempFoot(keepMe));
+    
+    % print some out for manual checking. Set up for a small data set!
+%     if numel(timesOut) > 0
+%         for k = 1:numel(timesOut)
+%             fprintf( '%d\t%.5f\t%d\n', iSite,single(timesOut(k))/30000, footprintOut(k) ); 
+%         end
+%     end
+        
 end
 
 

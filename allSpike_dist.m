@@ -17,7 +17,7 @@ if (length(varargin) == 0)
     % if running standalone, set params here
     zMin = -inf;
     zMax = inf;
-    exChan = [127];
+    exChan = [];
     % get thresholding results file from user
     [fileName,fileDir]=uigetfile('*.mat', 'Select threshold results file' );
 else
@@ -63,6 +63,8 @@ chanOutName = [fileName(1:suffPos-1), '_chan.txt'];
 chanOutID = fopen( fullfile(fileDir,chanOutName), 'w');
 histName = [fileName(1:suffPos-1), '_hist.txt'];
 histID = fopen( fullfile(fileDir,histName), 'w');
+footHistName = [fileName(1:suffPos-1), '_foothist.txt'];
+footHistID = fopen( fullfile(fileDir,footHistName), 'w');
 
 load(fullfile(fileDir,fileName));
 dataType = res.dataType;
@@ -168,7 +170,7 @@ end
 
 MAD_goodChan = res.MAD;
 MAD_goodChan(removeChan) = [];
-goodChanList = (0:383);
+goodChanList = (0:numel(res.MAD)-1);
 goodChanList(removeChan) = [];
 
 pVec = [0.5, 0.9, 0.99];
@@ -254,6 +256,7 @@ caxis([0 20]);
 
 f3 = figure('Units','Centimeters','Position',[8,5,14,18]);
 subplot(3,1,1);
+
 plot(1:numel(goodChanList), MAD_goodChan(zsorder));
 titleStr = sprintf('est RMS' );
 title(titleStr, 'Interpreter', 'none');
@@ -274,9 +277,18 @@ title(titleStr, 'Interpreter', 'none');
 xlabel('channels sorted by shank, then z');
 ylabel('voltage at percentile (uV)');
 
+f4 = figure('Units','Centimeters','Position',[8,5,14,18]);
+th = res.mTimeHist;
+th = th(goodChanList+1,:);
+th = th(zsorder,:);
+thmap = heatmap(th,'GridVisible','off');
+titleStr = sprintf('event rate vs. time','Interpreter', 'none' );
+title(titleStr);
+xlabel('time (sec/10)');
+ylabel('channels sorted by shank, then z');
 
 if isfield(res, 'probeType' )
-    plotChanFiles( res.probeType, fullfile(fileDir,chanOutName) );
+    plotChanFiles( res.probeType, 2, fullfile(fileDir,chanOutName) );
 end
 
 fprintf( histID, 'uV\thistCounts\tnormHist\n');
@@ -331,6 +343,27 @@ fprintf( outID, '%s\t%.3f\t%.3f\t%.3f\t%.3f\t%d\t%.3f\t%.3f\t%.3f\t%.3f\n', ...
 
 fclose(histID);
 fclose(outID);
+
+% If it was measured, build histogram of spike footprints from good channels
+if isfield(res,"mergedFood")
+mergedFootGood = [];
+for k = goodChanList
+    goodSpikeInd = find(res.mergedSites == k);
+    mergedFootGood = [mergedFootGood;res.mergedFoot(goodSpikeInd)];
+end
+
+fedges = 1:21;
+[fcount,~] = histcounts((mergedFootGood), fedges);
+totCounts = sum(fcount);
+
+fprintf( footHistID, 'numSites\tfCounts\tnormHist\n');
+for k = 1:numel(fcount)
+    fprintf(footHistID, "%d\t%d\t%.3f\n", fedges(k),fcount(k),fcount(k)/totCounts);
+end
+
+fclose(footHistID);
+
+end
 
 end
 
