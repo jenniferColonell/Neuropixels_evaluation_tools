@@ -88,7 +88,7 @@ end
 
 
 removeChan = [];
-uVPerBin = 2.34375;      %only exact for neuropixels; recalc if rebinning
+uVPerBin = 2.34375;      %only exact for neuropixels 1; recalc if rebinning
 switch dataType
     
     case 0
@@ -134,8 +134,51 @@ switch dataType
             else
                 removeChan = [removeChan,i]; 
             end
-        end  
+        end
+        res.ampHist = [];
+        res.ampHist = tempHist;
+        %size(res.ampHist)
+        xPos = [];
+        xPos = newX;
+        zPos = [];
+        zPos = newZ;
+        shank = [];
+        shank = newShank;
+
+        %now rebin the histograms so the bins are as close as possible to
+        %NP1.0 bins        
+        sumBin = round(uVPerBin/uVPerBit);
+        uVPerBin = sumBin*uVPerBit;
+        nNewBin = floor(nBin/sumBin);
+        tempHist = zeros(goodChan,nNewBin,'int32');
+        %size(tempHist)
+        for k = 1:nNewBin
+            currStart = (k-1)*sumBin + 1;
+            for i = 1:goodChan
+                tempHist(i,k) = sum(res.ampHist(i,(currStart:currStart+sumBin-1)));
+            end
+        end      
+        nBin = nNewBin;
+        res.ampHist = [];
+        res.ampHist = tempHist;
         
+    case 2
+        nBin = 4096;    %amplitudes will be histogrammed over all bits
+        uVPerBit = 1e6*((2*0.62)/100)/(2*2048);
+        goodChan = 0;
+        for i = 1:nChan
+            isBad = sum(find(exChan == i));
+            if( inZRange(i) == 1 && isBad == 0 )
+                goodChan = goodChan + 1;
+                tempHist(goodChan,:) = origHist(i,:);
+                newZ(goodChan) = zPos(i);
+                newX(goodChan) = xPos(i);
+                newShank(goodChan) = shank(i);
+            else
+                removeChan = [removeChan,i]; 
+            end
+        end  
+
         res.ampHist = [];
         res.ampHist = tempHist;
         %size(res.ampHist)
